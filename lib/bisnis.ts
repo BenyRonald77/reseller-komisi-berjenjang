@@ -141,10 +141,10 @@ export async function pohonJaringan(
   tx: PrismaClient,
   rootId?: number
 ): Promise<NodeJaringan[]> {
-  type Flat = { id: number; nama: string; kode: string; uplineId: number | null; kedalaman: number };
-  let flat: Flat[];
+  type Flat = { id: number; nama: string; kode: string; uplineId: number | null; kedalaman: number | bigint };
+  let flatRaw: Flat[];
   if (rootId != null) {
-    flat = await tx.$queryRaw<Flat[]>`
+    flatRaw = await tx.$queryRaw<Flat[]>`
       WITH RECURSIVE j(id, nama, kode, uplineId, kedalaman) AS (
         SELECT id, nama, kode, uplineId, 0 FROM Reseller WHERE id = ${rootId}
         UNION ALL
@@ -153,7 +153,7 @@ export async function pohonJaringan(
       )
       SELECT id, nama, kode, uplineId, kedalaman FROM j ORDER BY kedalaman, id`;
   } else {
-    flat = await tx.$queryRaw<Flat[]>`
+    flatRaw = await tx.$queryRaw<Flat[]>`
       WITH RECURSIVE j(id, nama, kode, uplineId, kedalaman) AS (
         SELECT id, nama, kode, uplineId, 0 FROM Reseller WHERE uplineId IS NULL
         UNION ALL
@@ -162,7 +162,8 @@ export async function pohonJaringan(
       )
       SELECT id, nama, kode, uplineId, kedalaman FROM j ORDER BY kedalaman, id`;
   }
-  if (flat.length === 0) return [];
+  if (flatRaw.length === 0) return [];
+  const flat = flatRaw.map((f) => ({ ...f, kedalaman: Number(f.kedalaman) }));
 
   const ids = flat.map((f) => f.id);
   const omzet = await tx.transaksi.groupBy({
@@ -204,12 +205,12 @@ export async function pohonJaringan(
 
 /** Kedalaman (level) tiap reseller via CTE — dipakai UI pohon. */
 export async function semuaLevel(tx: PrismaClient): Promise<Map<number, number>> {
-  const rows = await tx.$queryRaw<{ id: number; kedalaman: number }[]>`
+  const rows = await tx.$queryRaw<{ id: number; kedalaman: number | bigint }[]>`
     WITH RECURSIVE j(id, kedalaman) AS (
       SELECT id, 0 FROM Reseller WHERE uplineId IS NULL
       UNION ALL
       SELECT r.id, j.kedalaman + 1 FROM Reseller r JOIN j ON r.uplineId = j.id
     )
     SELECT id, kedalaman FROM j`;
-  return new Map(rows.map((r) => [r.id, r.kedalaman]));
+  return new Map(rows.map((r) => [r.id, Number(r.kedalaman)]));
 }
