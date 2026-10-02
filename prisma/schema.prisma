@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Reseller {
+  id        Int         @id @default(autoincrement())
+  nama      String
+  kode      String      @unique
+  kontak    String?
+  uplineId  Int?
+  upline    Reseller?   @relation("UplineDownline", fields: [uplineId], references: [id], onDelete: SetNull)
+  downlines Reseller[]  @relation("UplineDownline")
+  transaksi Transaksi[]
+  ledger    KomisiLedger[] @relation("PenerimaKomisi")
+  createdAt String      @default("")
+}
+
+model KomisiConfig {
+  id     Int   @id @default(autoincrement())
+  level  Int   @unique
+  persen Float
+}
+
+model Transaksi {
+  id         Int            @id @default(autoincrement())
+  resellerId Int
+  reseller   Reseller       @relation(fields: [resellerId], references: [id], onDelete: Restrict)
+  nominal    Float
+  tanggal    String
+  periode    String
+  createdAt  String         @default("")
+  ledger     KomisiLedger[]
+}
+
+model KomisiLedger {
+  id          Int       @id @default(autoincrement())
+  resellerId  Int
+  penerima    Reseller  @relation("PenerimaKomisi", fields: [resellerId], references: [id], onDelete: Restrict)
+  transaksiId Int
+  transaksi   Transaksi @relation(fields: [transaksiId], references: [id], onDelete: Cascade)
+  level       Int
+  nominal     Float
+  periode     String
+  status      String    @default("MENUNGGU")
+}
+
+model PeriodeKomisi {
+  id       Int     @id @default(autoincrement())
+  periode  String  @unique
+  status   String  @default("TERBUKA")
+  lockedAt String?
+}
